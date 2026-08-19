@@ -1,0 +1,320 @@
+"""
+用户认证管理模块
+支持用户注册、登录验证，密码使用 bcrypt 加盐加密存储
+支持角色管理（admin/user），管理员可在后端查看明文密码
+"""
+import os
+import json
+import hashlib
+
+from app.config import settings
+
+
+def _get_users_file() -> str:
+    """获取用户数据文件路径"""
+    return os.path.join(settings.DATA_DIR, "users", "users.json")
+
+
+OLD_FULL_KB_ADMIN_USERNAME = "adminquanzhi"
+FULL_KB_ADMIN_USERNAME = "hustroboconadmin"
+
+
+def _migrate_user_owned_files(old_username: str, new_username: str) -> None:
+    """迁移账号改名后按用户名保存的聊天索引和智能体配置。"""
+    app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    file_pairs = [
+        (
+            os.path.join(settings.DATA_DIR, "users", f"{old_username}_chats.json"),
+            os.path.join(settings.DATA_DIR, "users", f"{new_username}_chats.json"),
+        ),
+        (
+            os.path.join(app_dir, "data", "agents", f"{old_username}.json"),
+            os.path.join(app_dir, "data", "agents", f"{new_username}.json"),
+        ),
+    ]
+    for old_path, new_path in file_pairs:
+        if not os.path.exists(old_path) or os.path.exists(new_path):
+            continue
+        try:
+            os.makedirs(os.path.dirname(new_path), exist_ok=True)
+            os.replace(old_path, new_path)
+        except OSError:
+            # 迁移文件失败不能阻断登录；管理员可在服务器上手工处理遗留文件。
+            pass
+
+
+def _load_users() -> dict:
+    """加载用户数据"""
+    users_file = _get_users_file()
+    if os.path.exists(users_file):
+        with open(users_file, "r", encoding="utf-8") as f:
+            users = json.load(f)
+        # 账号迁移：删除旧 dfsr1，并确保三个正式账号存在且角色正确
+        changed = False
+        # 账号改名：保留原 adminquanzhi 的密码和角色，并迁移其聊天索引与智能体配置。
+        if OLD_FULL_KB_ADMIN_USERNAME in users:
+            if FULL_KB_ADMIN_USERNAME not in users:
+                users[FULL_KB_ADMIN_USERNAME] = users[OLD_FULL_KB_ADMIN_USERNAME]
+            del users[OLD_FULL_KB_ADMIN_USERNAME]
+            changed = True
+        _migrate_user_owned_files(OLD_FULL_KB_ADMIN_USERNAME, FULL_KB_ADMIN_USERNAME)
+        # 管理员账号改名：admin → administrator，密码固定为 admin12345。
+        if "admin" in users and "administrator" not in users:
+            users["administrator"] = users.pop("admin")
+            changed = True
+        _migrate_user_owned_files("admin", "administrator")
+        # 账号改名：adminsubao → hustroboconadmin（管理员），user01 → rc01（普通用户）
+        if "adminsubao" in users and "hustroboconadmin" not in users:
+            users["hustroboconadmin"] = users.pop("adminsubao")
+            changed = True
+        _migrate_user_owned_files("adminsubao", "hustroboconadmin")
+        if "user01" in users and "rc01" not in users:
+            users["rc01"] = users.pop("user01")
+            changed = True
+        _migrate_user_owned_files("user01", "rc01")
+        # 删除已废弃的 jsxf 普通用户
+        if "jsxf" in users:
+            del users["jsxf"]
+            changed = True
+        if "dfsr1" in users:
+            del users["dfsr1"]
+            changed = True
+        required_users = {
+            "administrator": ("admin12345", "admin"),
+            "hustroboconadmin": ("admin123", "admin"),
+            "rc01": ("rc12345", "user"),
+            "jiangxy": ("123456abc", "user"),
+        }
+        for username, (default_password, required_role) in required_users.items():
+            if username not in users:
+                users[username] = {
+                    "password_hash": _hash_password(default_password),
+                    "password_plain": default_password,
+                    "role": required_role,
+                }
+                changed = True
+            elif users[username].get("role") != required_role:
+                users[username]["role"] = required_role
+                changed = True
+        # 一次性迁移上一版本生成的临时密码；已被管理员改过的密码保持不变
+        password_migrations = {
+            "hustroboconadmin": ("subao123", "admin123"),
+            "rc01": ("subaouser1", "rc12345"),
+        }
+        for username, (old_password, new_password) in password_migrations.items():
+            info = users.get(username, {})
+            if info.get("password_plain") == old_password:
+                info["password_hash"] = _hash_password(new_password)
+                info["password_plain"] = new_password
+                changed = True
+        # 兼容旧数据：为没有 role 和 password_plain 的其他用户补全字段
+        for username, info in users.items():
+            if "role" not in info:
+                # admin 用户默认为管理员角色，其他为普通用户
+                info["role"] = "admin" if username == "administrator" else "user"
+                changed = True
+            if "password_plain" not in info:
+                info["password_plain"] = ""
+                changed = True
+        if changed:
+            _save_users(users)
+        return users
+    # 首次启动时创建正式账号（管理员为 administrator/admin12345）
+    default_users = {
+        "administrator": {
+            "password_hash": _hash_password("admin12345"),
+            "password_plain": "admin12345",
+            "role": "admin",
+        },
+        "hustroboconadmin": {
+            "password_hash": _hash_password("admin123"),
+            "password_plain": "admin123",
+            "role": "admin",
+        },
+        "rc01": {
+            "password_hash": _hash_password("rc12345"),
+            "password_plain": "rc12345",
+            "role": "user",
+        },
+        "jiangxy": {
+            "password_hash": _hash_password("123456abc"),
+            "password_plain": "123456abc",
+            "role": "user",
+        },
+    }
+    _save_users(default_users)
+    return default_users
+
+
+def _save_users(users: dict) -> None:
+    """保存用户数据"""
+    users_file = _get_users_file()
+    os.makedirs(os.path.dirname(users_file), exist_ok=True)
+    with open(users_file, "w", encoding="utf-8") as f:
+        json.dump(users, f, ensure_ascii=False, indent=2)
+
+
+def _hash_password(password: str) -> str:
+    """密码哈希 - 使用 bcrypt 加盐加密"""
+    try:
+        import bcrypt
+        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    except ImportError:
+        # fallback: 如果 bcrypt 未安装，使用 SHA256 + 固定盐（不推荐，但比无盐好）
+        return hashlib.sha256(f"xfagent-salt-{password}".encode()).hexdigest()
+
+
+def _verify_password(password: str, password_hash: str) -> bool:
+    """验证密码"""
+    try:
+        import bcrypt
+        # 尝试 bcrypt 验证
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    except (ImportError, ValueError):
+        # fallback: SHA256 验证（兼容旧密码，需同时检查带盐和不带盐的格式）
+        return password_hash == hashlib.sha256(f"xfagent-salt-{password}".encode()).hexdigest() or password_hash == hashlib.sha256(password.encode()).hexdigest()
+
+
+def register_user(username: str, password: str, role: str = "user") -> dict:
+    """
+    注册新用户（仅后端/管理员可调用，前端不提供注册入口）
+
+    Args:
+        username: 用户名
+        password: 明文密码
+        role: 角色，默认为 "user"，仅管理员可设置为 "admin"
+
+    Returns:
+        dict: {"success": Bool, "message": str}
+    """
+    if len(username) < 2:
+        return {"success": False, "message": "用户名至少2个字符"}
+    if len(password) < 4:
+        return {"success": False, "message": "密码至少4个字符"}
+    if role not in ("admin", "user"):
+        return {"success": False, "message": "无效的角色，只支持 admin 或 user"}
+
+    users = _load_users()
+    if username in users:
+        return {"success": False, "message": "用户名已存在"}
+
+    users[username] = {
+        "password_hash": _hash_password(password),
+        "password_plain": password,
+        "role": role,
+    }
+    _save_users(users)
+    return {"success": True, "message": f"用户 {username} 创建成功"}
+
+
+def login_user(username: str, password: str) -> dict:
+    """
+    用户登录验证
+
+    Returns:
+        dict: {"success": Bool, "message": str, "role": str}
+    """
+    users = _load_users()
+    if username not in users:
+        return {"success": False, "message": "用户名或密码错误"}
+
+    if not _verify_password(password, users[username]["password_hash"]):
+        return {"success": False, "message": "用户名或密码错误"}
+
+    # 如果密码是旧的 SHA256 格式，自动升级为 bcrypt
+    if not users[username]["password_hash"].startswith("$2"):
+        users[username]["password_hash"] = _hash_password(password)
+        _save_users(users)
+
+    user_role = users[username].get("role", "user")
+    return {"success": True, "message": "登录成功", "role": user_role}
+
+
+def get_user_role(username: str) -> str:
+    """获取用户角色"""
+    users = _load_users()
+    if username in users:
+        return users[username].get("role", "user")
+    return ""
+
+
+def is_admin(username: str) -> bool:
+    """判断用户是否为管理员"""
+    return get_user_role(username) == "admin"
+
+
+def list_all_users() -> list:
+    """
+    列出所有用户信息（含明文密码），仅管理员可用
+
+    Returns:
+        list: [{"username": str, "role": str, "password_plain": str}, ...]
+    """
+    users = _load_users()
+    result = []
+    for username, info in users.items():
+        result.append({
+            "username": username,
+            "role": info.get("role", "user"),
+            "password_plain": info.get("password_plain", ""),
+            "created_at": info.get("created_at", ""),
+        })
+    return result
+
+
+def delete_user(username: str) -> dict:
+    """
+    删除用户（不允许删除 admin 账号）
+
+    Returns:
+        dict: {"success": Bool, "message": str}
+    """
+    if username == "administrator":
+        return {"success": False, "message": "不允许删除管理员账号"}
+
+    users = _load_users()
+    if username not in users:
+        return {"success": False, "message": f"用户 {username} 不存在"}
+
+    del users[username]
+    _save_users(users)
+    return {"success": True, "message": f"用户 {username} 已删除"}
+
+
+def update_user_role(username: str, role: str) -> dict:
+    """
+    修改用户角色（仅管理员可用）
+
+    Returns:
+        dict: {"success": Bool, "message": str}
+    """
+    if role not in ("admin", "user"):
+        return {"success": False, "message": "无效的角色，只支持 admin 或 user"}
+
+    users = _load_users()
+    if username not in users:
+        return {"success": False, "message": f"用户 {username} 不存在"}
+
+    users[username]["role"] = role
+    _save_users(users)
+    return {"success": True, "message": f"用户 {username} 角色已更新为 {role}"}
+
+
+def reset_user_password(username: str, new_password: str) -> dict:
+    """
+    重置用户密码（仅管理员可用）
+
+    Returns:
+        dict: {"success": Bool, "message": str}
+    """
+    if len(new_password) < 4:
+        return {"success": False, "message": "密码至少4个字符"}
+
+    users = _load_users()
+    if username not in users:
+        return {"success": False, "message": f"用户 {username} 不存在"}
+
+    users[username]["password_hash"] = _hash_password(new_password)
+    users[username]["password_plain"] = new_password
+    _save_users(users)
+    return {"success": True, "message": f"用户 {username} 密码已重置"}

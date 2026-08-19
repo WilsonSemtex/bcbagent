@@ -1,6 +1,6 @@
 /*
- * 失效模式分析智能体配置
- * 单智能体版本：仅保留一个「失效模式分析」智能体
+ * 板插板校核智能体配置
+ * 单智能体版本：仅保留一个「板插板校核智能体」
  */
 (function () {
     'use strict';
@@ -29,13 +29,13 @@
 
     const workspaces = {
         'failure-mode-analysis-agent': {
-            name: '失效模式分析',
-            icon: '🔍',
+            name: '板插板校核智能体',
+            icon: '📐',
             color: '#d4380d',
-            slogan: '失效归因，闭环改进',
-            desc: '面向产品失效模式与影响分析（FMEA）、失效根因分析与改进闭环，提供失效模式梳理、失效机理分析、风险优先级评估、8D 改进与防再发措施跟踪。',
+            slogan: '板插缺陷，智能识别',
+            desc: '面向板插板结构的缺陷检查：用户上传板材的 2D 图片，智能体自动分析图片内容，识别板插板的设计缺陷并输出分析结论与改进建议。',
             subagents: buildSubagents('failure-mode-analysis-agent', [
-                ['失效模式分析', '梳理产品/过程失效模式与失效机理，评估严重度、发生频度与探测度（S/O/D），输出 RPN 风险排序与 FMEA 表格；支持 8D 失效根因分析、改进措施制定与防再发跟踪。', [CAP.DOC, CAP.DATA, CAP.KB]]
+                ['板插板校核智能体', '用户上传板材 2D 图片后，智能体分析图片中的板插板结构，识别设计缺陷（尺寸配合、干涉、结构强度、装配性等），输出缺陷分析结论、风险等级与改进建议。', [CAP.DOC, CAP.DATA, CAP.KB]]
             ])
         }
     };
@@ -54,7 +54,7 @@
     window.SUBAO_WORKSPACE_CONFIG = workspaces;
     window.SUBAO_SUBAGENT_INDEX = subagentIndex;
     window.SUBAO_WORK_METHOD = {
-        phaseOne: '以导入智能体知识库、数据分析与可视化导出为主要工作方式；知识库尽可能汇集公司及行业专业文件，例如体系文件、报告、失效模式库和标准条款，形成公司级内部记忆。',
+        phaseOne: '以导入智能体知识库、数据分析与可视化导出为主要工作方式；知识库尽可能汇集公司及行业专业文件，例如体系文件、报告、缺陷案例和标准条款，形成公司级内部记忆。',
         phaseTwo: [
             '与 MES、QMS、ERP 等系统集成，可通过 MCP 或 API 扩展，后续升级为自动读取系统数据。',
             '实时在线 SPC 监控，需要直连 PLC 或 MES 数据流。',

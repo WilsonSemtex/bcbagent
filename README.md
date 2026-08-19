@@ -1,14 +1,14 @@
-# 🔍 失效模式分析智能体
+# 📐 板插板校核智能体
 
-基于 SBAGENT（FastAPI + 自定义单页前端）改造的单智能体网页应用：**登录页与原版一致，登录后只有一个「失效模式分析」智能体**，其余聊天逻辑保留。
+基于 SBAGENT（FastAPI + 自定义单页前端）改造的单智能体网页应用：**登录页与原版一致，登录后只有一个「板插板校核智能体」**，其余聊天逻辑保留。
 
 ## 功能
 
 - 🔐 用户名/密码登录（登录页与原版一致）
-- 🤖 单一智能体「失效模式分析」：FMEA 失效模式与影响分析、8D 失效根因分析、RPN 风险排序、改进与防再发跟踪
+- 📐 单一智能体「板插板校核智能体」：用户上传板材 2D 图片，智能体自动分析图片内容，识别板插板结构的设计缺陷（尺寸配合、干涉、结构强度、装配性等）并输出缺陷分析结论与改进建议
 - 💬 多轮对话（流式输出、会话记忆、历史聊天列表）
 - 📚 文档知识库（上传 PDF/TXT/DOCX 等，RAG 检索增强回答）
-- 🧠 模型：仅 DeepSeek **deepseek-v4-flash**（DeepSeek 官方 API）
+- 🧠 模型：仅 DeepSeek **deepseek-v4-flash**（DeepSeek 官方 API）+ 图片分析使用视觉模型（glm-4.6v-flash）
 
 ## 快速开始（本地离线测试）
 
@@ -74,7 +74,7 @@ python app/main.py
 | 接口 | 说明 |
 |---|---|
 | `POST /api/v1/auth/login` | 登录，返回 JWT |
-| `GET /api/v1/agents` | 获取当前用户的智能体列表（唯一：失效模式分析） |
+| `GET /api/v1/agents` | 获取当前用户的智能体列表（唯一：板插板校核智能体） |
 | `GET /api/v1/models` | 获取可用模型（仅 deepseek-v4-flash） |
 | `POST /api/v1/chat` | 与智能体对话（流式） |
 | `POST /api/v1/upload` | 上传文档到知识库 |
@@ -104,7 +104,7 @@ docker run -d --name failure-mode-analysis-agent -p 8000:8000 \
 ```bash
 git init
 git add .
-git commit -m "失效模式分析智能体：单智能体 + deepseek-v4-flash"
+git commit -m "板插板校核智能体：单智能体 + deepseek-v4-flash"
 git remote add origin https://github.com/<你的用户名>/failure-analysis-agent.git
 git push -u origin main
 ```
@@ -130,6 +130,6 @@ git push -u origin main
 
 ## 版本说明
 
-- 智能体：由 7 个工作区 + 71 个子智能体精简为单一「失效模式分析」（`failure-mode-analysis-agent-sub-01`）
+- 智能体：由 7 个工作区 + 71 个子智能体精简为单一「板插板校核智能体」（`failure-mode-analysis-agent-sub-01`）
 - 模型：仅保留 `deepseek-v4-flash`（DeepSeek 官方 API，`https://api.deepseek.com/v1`）
 - 登录：管理员账号由 `admin/admin123` 调整为 `administrator/admin12345`

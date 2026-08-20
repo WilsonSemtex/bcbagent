@@ -1395,6 +1395,21 @@ async def chat_with_file_stream(
 
 
 
+    elif ext == ".dxf":
+        # DXF 板材图纸：矢量解析几何与尺寸，转为文本交给主模型（DeepSeek）分析
+        temp_dir = os.path.join(settings.DATA_DIR, "temp", session_id)
+        os.makedirs(temp_dir, exist_ok=True)
+        decoded_filename = unquote(file.filename)
+        file_path = os.path.join(temp_dir, decoded_filename)
+        with open(file_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+        try:
+            from app.dxf_tools import dxf_to_text
+            dxf_text = await asyncio.to_thread(dxf_to_text, file_path)
+            full_message = f"[用户上传了DXF图纸: {file.filename}]\n\n图纸解析内容（矢量优先，单位mm）：\n{dxf_text}\n\n{message}"
+        except Exception as e:
+            full_message = f"[用户上传了DXF图纸: {file.filename}，但解析失败: {str(e)}]\n\n{message}"
+
     elif ext in code_exts:
 
         # 代码/其他文本文件：读取内容传给LLM

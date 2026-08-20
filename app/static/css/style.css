@@ -2279,20 +2279,25 @@ html { scroll-behavior: smooth; }
     box-shadow: none;
 }
 
-/* Form Header */
-.login-form-header {
-    margin-bottom: 32px;
-}
-.login-form-title-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
-}
-.login-lock-icon {
-    color: #1051BF;
-    flex-shrink: 0;
-}
+/* Form Header */
+.login-form-header {
+    margin-bottom: 32px;
+    /* [修复] 用户登录/USERS LOGIN 蓝色圆角背景（与登录按钮同色 #1051BF），
+       内容向外延伸一段距离；margin-bottom 32px 保证不触碰到输入框 */
+    background: #1051BF;
+    border-radius: 16px;
+    padding: 22px 26px 18px;
+}
+.login-form-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.login-lock-icon {
+    color: #FFFFFF;
+    flex-shrink: 0;
+}
 .login-form-header h3 {
     font-size: 24px;
     font-weight: 700;
@@ -2310,13 +2315,13 @@ html { scroll-behavior: smooth; }
     text-transform: uppercase;
     text-shadow: 0 1px 3px rgba(0,0,0,0.4);
 }
-.login-subtitle-line {
-    width: 100%;
-    height: 2px;
-    background: #1051BF;
-    margin-top: 10px;
-    border-radius: 1px;
-}
+.login-subtitle-line {
+    width: 100%;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.55);
+    margin-top: 10px;
+    border-radius: 1px;
+}
 
 /* Form Body */
 .login-modal-body {
@@ -2381,6 +2386,10 @@ html { scroll-behavior: smooth; }
     box-shadow: 0 2px 8px rgba(16, 81, 191, 0.25);
 }
 
+/* [修复] 隐藏质量工具 Skills 按钮与导出对话按钮（保留后台代码，仅 UI 不显示） */
+#skillsWrapper, .skills-wrapper { display: none !important; }
+.export-wrapper { display: none !important; }
+
 /* Message box */
 .msg-box {
     margin-top: 12px;

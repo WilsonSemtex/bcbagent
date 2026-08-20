@@ -2475,7 +2475,6 @@ function renderChatList() {
         const safeTitle = escapeHtml(chat.title || '新对话');
         const timeStr = formatTime(chat.updated_at || chat.created_at);
         item.innerHTML = `
-            <span class="chat-icon">💬</span>
             <span class="chat-title" title="${safeTitle}">${safeTitle}</span>
             <span class="chat-time">${timeStr}</span>
             <div class="chat-actions">
